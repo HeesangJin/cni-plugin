@@ -1,0 +1,43 @@
+name: Build and Push CNI Plugin (AMD64 Only)
+
+on:
+  push:
+    branches:
+    - main
+    - 'feat/**'
+  workflow_dispatch:
+
+
+jobs:
+  build-and-push-cni:
+    runs-on: ubuntu-latest
+    steps:
+    # 1. 소스코드 체크아웃
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # [삭제됨] Set up QEMU (같은 아키텍처라 필요 없음)
+
+    # 2. Docker Buildx 설정 (Dockerfile.image 문법 때문에 이건 필수!)
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    # 3. Docker Hub 로그인
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    # 4. 빌드 및 푸시
+    - name: Build and push
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: Dockerfile.image # 공식 Dockerfile 사용
+        push: true
+        # QEMU 없이 네이티브 속도로 빌드됨
+        platforms: linux/amd64
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/my-cni-plugin:${{ github.sha }}
+          ${{ secrets.DOCKER_USERNAME }}/my-cni-plugin:latest

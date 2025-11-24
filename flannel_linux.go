@@ -81,7 +81,24 @@ func getDelegateIPAM(n *NetConf, fenv *subnetEnv) (map[string]interface{}, error
 	return ipam, nil
 }
 
+// [추가] 디버그 로그를 파일에 남기는 함수
+func logToFile(msg string) {
+	f, err := os.OpenFile("/tmp/flannel-cni-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	if _, err := f.WriteString(msg + "\n"); err != nil {
+		return
+	}
+}
+
 func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
+	logToFile("==================================================================")
+	logToFile(fmt.Sprintf(">>> [1] INPUT from Kubelet (ContainerID: %s)", args.ContainerID))
+	logToFile(string(args.StdinData)) // Kubelet이 준 원본 JSON
+	logToFile("------------------------------------------------------------------")
+
 	n.Delegate["name"] = n.Name
 
 	if !hasKey(n.Delegate, "type") {
@@ -113,7 +130,17 @@ func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
 		return fmt.Errorf("failed to assemble Delegate IPAM: %w", err)
 	}
 	n.Delegate["ipam"] = ipam
+
+	// 기존 stderr 로그 (이건 Kubelet 로그에서나 보임)
 	fmt.Fprintf(os.Stderr, "\n%#v\n", n.Delegate)
+
+	// ▼▼▼ [2. 출력 주문서(Delegate) 기록] ▼▼▼
+	// 완성된 n.Delegate 맵을 보기 좋게 JSON으로 변환
+	outputBytes, _ := json.MarshalIndent(n.Delegate, "", "  ")
+
+	logToFile(fmt.Sprintf(">>> [2] OUTPUT to Delegate Plugin (%s)", n.Delegate["type"]))
+	logToFile(string(outputBytes)) // Bridge/Host-local에게 넘길 최종 JSON
+	logToFile("==================================================================\n")
 
 	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
 }

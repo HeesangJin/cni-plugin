@@ -87,10 +87,13 @@ func (se *subnetEnv) missing() string {
 }
 
 func loadFlannelNetConf(bytes []byte) (*NetConf, error) {
+	// 기본값 설정: subnet.env 파일 위치 등
 	n := &NetConf{
-		SubnetFile: defaultSubnetFile,
+		SubnetFile: defaultSubnetFile, // "/run/flannel/subnet.env"
 		DataDir:    defaultDataDir,
 	}
+
+	// JSON 파싱
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
@@ -128,6 +131,7 @@ func isSubnetAlreadyPresent(nws []*net.IPNet, nw *net.IPNet) bool {
 }
 
 func loadFlannelSubnetEnv(fn string) (*subnetEnv, error) {
+	// 파일 열기 (/run/flannel/subnet.env)
 	f, err := os.Open(fn)
 	if err != nil {
 		return nil, err
@@ -137,6 +141,7 @@ func loadFlannelSubnetEnv(fn string) (*subnetEnv, error) {
 	se := &subnetEnv{}
 
 	s := bufio.NewScanner(f)
+	// 한 줄씩 읽으면서 해석
 	for s.Scan() {
 		parts := strings.SplitN(s.Text(), "=", 2)
 		switch parts[0] {
@@ -153,7 +158,7 @@ func loadFlannelSubnetEnv(fn string) (*subnetEnv, error) {
 				}
 			}
 
-		case "FLANNEL_SUBNET":
+		case "FLANNEL_SUBNET": // 예: 10.244.1.0/24
 			_, se.sn, err = net.ParseCIDR(parts[1])
 			if err != nil {
 				return nil, err
@@ -178,7 +183,7 @@ func loadFlannelSubnetEnv(fn string) (*subnetEnv, error) {
 				return nil, err
 			}
 
-		case "FLANNEL_MTU":
+		case "FLANNEL_MTU": // 예: 1450
 			mtu, err := strconv.ParseUint(parts[1], 10, 32)
 			if err != nil {
 				return nil, err
@@ -264,6 +269,26 @@ func delegateAdd(cid, dataDir string, netconf map[string]interface{}) error {
 		err = fmt.Errorf("failed to delegate add: %w", err)
 		return err
 	}
+
+	// ▼▼▼ [수정됨] 성공 결과(영수증) 파일에 바로 쓰기 ▼▼▼
+	logToFile("==================================================================")
+	logToFile(">>> [3] RESULT from Delegate Plugin (Success!)")
+
+	// 파일을 열어서 Writer로 사용
+	f, err := os.OpenFile("/tmp/flannel-cni-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err == nil {
+		// PrintTo에게 파일 객체를 넘겨줍니다. (여기에 JSON이 예쁘게 써짐)
+		result.PrintTo(f)
+		f.WriteString("\n") // 보기 좋게 줄바꿈 추가
+		f.Close()
+	} else {
+		// 파일 열기 실패 시 (혹시 모르니)
+		fmt.Fprintf(os.Stderr, "failed to open debug log: %v", err)
+	}
+
+	logToFile("==================================================================\n")
+	// ▲▲▲
+
 	return result.Print()
 }
 
@@ -278,15 +303,18 @@ func isString(i interface{}) bool {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	// 1. Kubelet 설정 읽기
 	n, err := loadFlannelNetConf(args.StdinData)
 	if err != nil {
 		return fmt.Errorf("failed to load flannel netconf file: %w", err)
 	}
+	// 2. subnet.env 파일 읽기 (내 구역 확인)
 	fenv, err := loadFlannelSubnetEnv(n.SubnetFile)
 	if err != nil {
 		return fmt.Errorf("failed to load flannel 'subnet.env' file: %w. Check the flannel pod log for this node.", err)
 	}
 
+	// 3. Delegate(하청) 설정 준비
 	if n.Delegate == nil {
 		n.Delegate = make(map[string]interface{})
 	} else {
@@ -305,6 +333,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		n.Delegate["runtimeConfig"] = n.RuntimeConfig
 	}
 
+	// 4. 실행! (doCmdAdd 호출)
 	return doCmdAdd(args, n, fenv)
 }
 
