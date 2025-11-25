@@ -96,6 +96,9 @@ func logToFile(msg string) {
 func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
 	logToFile("==================================================================")
 	logToFile(fmt.Sprintf(">>> [1] INPUT from Kubelet (ContainerID: %s)", args.ContainerID))
+	logToFile(fmt.Sprintf("    ContainerID: %s", args.ContainerID))
+	logToFile(fmt.Sprintf("    NetNS Path : %s", args.Netns)) // <--- [추가] 이거 찍어보면 나옴!
+	logToFile(fmt.Sprintf("    Interface  : %s", args.IfName))
 	logToFile(string(args.StdinData)) // Kubelet이 준 원본 JSON
 	logToFile("------------------------------------------------------------------")
 

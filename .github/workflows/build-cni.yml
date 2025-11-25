@@ -41,3 +41,19 @@ jobs:
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/my-cni-plugin:${{ github.sha }}
           ${{ secrets.DOCKER_USERNAME }}/my-cni-plugin:latest
+
+    - name: Trigger Daemon Workflow
+      uses: peter-evans/repository-dispatch@v3
+      with:
+        # 방금 만든 PAT 토큰 (Secret 이름 확인!)
+        token: ${{ secrets.DAEMON_REPO_TRIGGER_TOKEN }}
+
+        # [중요] 신호를 보낼 타겟 리포지토리 (Owner/RepoName 형식)
+        # 예: HeesangJin/flannel 또는 HeesangJin/flannel-daemon
+        repository: HeesangJin/flannel
+
+        # 신호 이름 (Daemon 쪽에서 이 이름을 기다려야 함)
+        event-type: update-cni-event
+
+        # 같이 보낼 데이터 (내가 만든 이미지 태그)
+        client-payload: '{"cni_sha": "${{ github.sha }}"}'
